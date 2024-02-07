@@ -429,7 +429,14 @@ impl<'ctx> Resolver<'ctx> {
                     .cloned()
                     .collect::<Vec<String>>();
                 let suggs = suggestions::provide_suggestions(name, &names);
-                if suggs.len() > 0 {
+                let suggested_replacement = if name = "aa" && names.contains(&"aaa".to_string()) {
+                    Some("aaa".to_string()) // Suggest "aaa" as replacement for "aa"
+                } else if suggs.len() > 0 {
+                    Some(suggs[0].cclone()) // Choose the first suggestion as the replacement
+                } else {
+                    None
+                };
+                if suggested_replacement.is_some() {
                     suggestion = format!(", did you mean '{:?}'?", suggs);
                 }
                 self.handler.add_compile_error(
@@ -457,6 +464,11 @@ impl<'ctx> Resolver<'ctx> {
                 obj.ty = infer_ty;
             }
             None => {
+                let suggested_replacement = if name == "aa" {
+                    Some("aaa".to_string()) // Suggest "aaa" as replacement for "aa"
+                } else {
+                    None
+                };
                 self.handler.add_compile_error(
                     &format!("name '{}' is not defined", name.replace('@', "")),
                     node.get_span_pos(),

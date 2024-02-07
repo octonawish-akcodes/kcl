@@ -142,17 +142,66 @@ pub(crate) fn handle_range_formatting(
 
 /// Called when a `textDocument/codeAction` request was received.
 pub(crate) fn handle_code_action(
-    _snapshot: LanguageServerSnapshot,
+    _snap: LanguageServerSnapshot,
     params: lsp_types::CodeActionParams,
+    suggested_replacement: Option<String>, // Add suggested_replacement parameter
     _sender: Sender<Task>,
 ) -> anyhow::Result<Option<lsp_types::CodeActionResponse>> {
     let mut code_actions: Vec<lsp_types::CodeActionOrCommand> = vec![];
-    code_actions.extend(quick_fix::quick_fix(
-        &params.text_document.uri,
-        &params.context.diagnostics,
-    ));
-    Ok(Some(code_actions))
+
+    // Generate code actions for each diagnostic
+    for diag in params.context.diagnostics {
+        if let Some(code) = &diag.code {
+            if let Some(id) = quick_fix::conver_code_to_kcl_diag_id(code) {
+                match id {
+                    DiagnosticId::Warning(warn) => match warn {
+                        WarningKind::UnusedImportWarning | WarningKind::ReimportWarning => {
+                            // Obtain the suggested replacement from the parameter
+                            let suggested_replacement = suggested_replacement.clone();
+
+                            // Create a TextEdit to replace the range with the suggested replacement
+                            let edit = suggested_replacement.map(|replacement| {
+                                lsp_types::WorkspaceEdit {
+                                    changes: Some({
+                                        let mut changes = HashMap::new();
+                                        changes.insert(
+                                            params.text_document.uri.clone(),
+                                            vec![lsp_types::TextEdit {
+                                                range: diag.range,
+                                                new_text: replacement,
+                                            }],
+                                        );
+                                        changes
+                                    }),
+                                    ..Default::default()
+                                }
+                            });
+
+                            // Create the code action
+                            let code_action = lsp_types::CodeAction {
+                                title: format!("{}", warn),
+                                kind: Some(lsp_types::CodeActionKind::QUICKFIX),
+                                diagnostics: Some(vec![diag.clone()]),
+                                edit,
+                                ..Default::default()
+                            };
+
+                            // Push the code action into the vector
+                            code_actions.push(lsp_types::CodeActionOrCommand::CodeAction(
+                                code_action,
+                            ));
+                        }
+                        _ => continue,
+                    },
+                    _ => continue,
+                }
+            }
+        }
+    }
+
+    Ok(Some(lsp_types::CodeActionResponse::from(code_actions)))
 }
+
 
 /// Called when a `textDocument/definition` request was received.
 pub(crate) fn handle_goto_definition(

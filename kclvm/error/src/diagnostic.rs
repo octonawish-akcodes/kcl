@@ -10,6 +10,7 @@ pub struct Diagnostic {
     pub level: Level,
     pub messages: Vec<Message>,
     pub code: Option<DiagnosticId>,
+    pub data: Option<serde_json::Value>,
 }
 
 /// Position describes an arbitrary source position including the filename,
@@ -108,6 +109,11 @@ impl Diagnostic {
         code: Option<DiagnosticId>,
         suggested_replacement: Option<String>,
     ) -> Self {
+        let data = if let Some(replacement)  = suggested_replacement {
+            Some(json!({"suggested_replacement": replacement}))
+        } else {
+            None
+        };
         Diagnostic {
             level,
             messages: vec![Message {
@@ -118,6 +124,7 @@ impl Diagnostic {
                 suggested_replacement,
             }],
             code,
+            data,
         }
     }
 
